@@ -19,7 +19,7 @@ fn process_instruction(
             processor::process_create_swap(program_id, accounts, instruction.offered_amount, instruction.desired_amount)
         }
         instruction::Instruction::CancelSwap(_) => {
-            processor::process_cancel_swap(accounts)
+            processor::process_cancel_swap(program_id, accounts)
         }
     }
 }

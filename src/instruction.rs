@@ -25,6 +25,15 @@ pub enum Instruction {
     ///   7. `[]` System program.
     CreateSwap(CreateSwap),
 
+    /// Cancels a swap.
+    /// Transfers offered tokens back to creator.
+    /// 
+    ///  0. `[writable, signer]`  Creator of the swap.
+    ///  1. `[writable]` The SPL Account (TokenAccount / ATA) of the creator.
+    ///  2. `[writable]` Swap state account, gets closed in this instruction. Seeds = [b"swap", ata_creator_offered].
+    ///  3. `[writable]` Escrow, the SPL Account (TokenAccount / ATA) that holds the offered tokens. Gets closed in this instruction. Seeds = [b"escrow", ata_creator_offered].
+    ///  4. `[]` The SPL token program.
+    ///  5. `[]` System program.
     CancelSwap(CancelSwap),
 }
 

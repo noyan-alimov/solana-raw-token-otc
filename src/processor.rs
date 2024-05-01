@@ -1,4 +1,4 @@
-use solana_program::{account_info::{next_account_info, AccountInfo}, entrypoint::ProgramResult, program::invoke, program_error::ProgramError, program_pack::Pack, pubkey::Pubkey, rent::Rent, system_instruction::create_account, system_program, sysvar::Sysvar};
+use solana_program::{account_info::{next_account_info, AccountInfo}, entrypoint::ProgramResult, program::{invoke, invoke_signed}, program_error::ProgramError, program_pack::{IsInitialized, Pack}, pubkey::Pubkey, rent::Rent, system_instruction::create_account, system_program, sysvar::Sysvar};
 use spl_token::{instruction::{initialize_account3, transfer}, state::{Account as TokenAccount, Mint}};
 
 use crate::{error::SwapError, state::Swap};
@@ -109,6 +109,121 @@ pub fn process_create_swap(program_id: &Pubkey, accounts: &[AccountInfo], offere
     Ok(())
 }
 
-pub fn process_cancel_swap(accounts: &[AccountInfo]) -> ProgramResult {
+pub fn process_cancel_swap(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
+    // Get accounts
+    let account_info_iter = &mut accounts.iter();
+    let creator = next_account_info(account_info_iter)?;
+    let ata_creator_offered = next_account_info(account_info_iter)?;
+    let swap = next_account_info(account_info_iter)?;
+    let ata_escrow = next_account_info(account_info_iter)?;
+    let token_program = next_account_info(account_info_iter)?;
+    let system_program = next_account_info(account_info_iter)?;
+
+    // Check creator
+    if !creator.is_signer {
+        return Err(ProgramError::MissingRequiredSignature);
+    }
+    if !creator.is_writable {
+        return Err(SwapError::AccountNotWritable.into());
+    }
+
+    // Check ata_creator_offered
+    if ata_creator_offered.owner != token_program.key {
+        return Err(ProgramError::IncorrectProgramId);
+    }
+    if !ata_creator_offered.is_writable {
+        return Err(SwapError::AccountNotWritable.into());
+    }
+    let ata_creator_offered_data = TokenAccount::unpack(&ata_creator_offered.data.borrow())?;
+    if ata_creator_offered_data.owner != *creator.key {
+        return Err(ProgramError::InvalidAccountData);
+    }
+
+    // Check swap
+    let (swap_pda, swap_bump) = Pubkey::find_program_address(&[b"swap", ata_creator_offered.key.as_ref()], program_id);
+    let (escrow_pda, escrow_bump) = Pubkey::find_program_address(&[b"escrow", ata_creator_offered.key.as_ref()], program_id);
+    let swap_data = Swap::unpack(&swap.data.borrow())?;
+    if !swap.is_writable {
+        return Err(SwapError::AccountNotWritable.into());
+    }
+    if swap.owner != program_id {
+        return Err(ProgramError::InvalidArgument);
+    }
+    if swap.key != &swap_pda {
+        return Err(ProgramError::InvalidArgument);
+    }
+
+    if !swap_data.is_initialized() {
+        return Err(ProgramError::InvalidAccountData);
+    }
+    if swap_data.creator != *creator.key {
+        return Err(ProgramError::InvalidAccountData);
+    }
+    if swap_data.ata_creator_offered != *ata_creator_offered.key {
+        return Err(ProgramError::InvalidAccountData);
+    }
+    if swap_data.escrow != *ata_escrow.key {
+        return Err(ProgramError::InvalidAccountData);
+    }
+    if swap_data.swap_bump != swap_bump {
+        return Err(ProgramError::InvalidArgument);
+    }
+    if swap_data.escrow_bump != escrow_bump {
+        return Err(ProgramError::InvalidAccountData);
+    }
+
+    // Check ata_escrow
+    if ata_escrow.key != &escrow_pda {
+        return Err(ProgramError::InvalidArgument);
+    }
+    if ata_escrow.owner != program_id {
+        return Err(ProgramError::IncorrectProgramId);
+    }
+    if !ata_escrow.is_writable {
+        return Err(SwapError::AccountNotWritable.into());
+    }
+
+    let escrow_data = TokenAccount::unpack(&ata_escrow.data.borrow())?;
+    if escrow_data.owner != *swap.key {
+        return Err(ProgramError::InvalidAccountData);
+    }
+    if escrow_data.mint != swap_data.offered_mint {
+        return Err(ProgramError::InvalidAccountData);
+    }
+
+    // Check token program
+    if token_program.key != &spl_token::id() {
+        return Err(ProgramError::IncorrectProgramId);
+    }
+
+    // Check system program
+    if system_program.key != &system_program::id() {
+        return Err(ProgramError::IncorrectProgramId);
+    }
+
+    // Transfer offered tokens back to creator
+    let transfer_ixn = transfer(token_program.key, ata_escrow.key, ata_creator_offered.key, swap.key, &[swap.key], swap_data.offered_amount)?;
+    invoke_signed(
+        &transfer_ixn,
+        &[ata_escrow.clone(), ata_creator_offered.clone(), swap.clone()],
+        &[&[&b"swap"[..], ata_creator_offered.key.as_ref(), &[swap_data.swap_bump]]]
+    )?;
+
+    // Close swap
+    **creator.try_borrow_mut_lamports()? = creator
+        .lamports()
+        .checked_add(swap.lamports())
+        .ok_or(ProgramError::ArithmeticOverflow)?;
+    **swap.try_borrow_mut_lamports()? = 0;
+    *swap.try_borrow_mut_data()? = &mut [];
+
+    // Close escrow
+    **creator.try_borrow_mut_lamports()? = creator
+        .lamports()
+        .checked_add(ata_escrow.lamports())
+        .ok_or(ProgramError::ArithmeticOverflow)?;
+    **ata_escrow.try_borrow_mut_lamports()? = 0;
+    *ata_escrow.try_borrow_mut_data()? = &mut [];
+
     Ok(())
 }
