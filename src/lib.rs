@@ -7,6 +7,7 @@ pub mod instruction;
 pub mod processor;
 pub mod error;
 
+#[cfg(not(feature = "no-entrypoint"))]
 solana_program::entrypoint!(process_instruction);
 fn process_instruction(
     program_id: &Pubkey,

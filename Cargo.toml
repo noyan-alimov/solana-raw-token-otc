@@ -6,12 +6,18 @@ publish = false
 
 [features]
 no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+default = []
+test = []
 
 [dependencies]
 solana-program = "=1.18.9"
 arrayref = "0.3.7"
 thiserror = "1.0"
-spl-token = "4.0.1"
+spl-token = { version = "4.0.1", features = ["no-entrypoint"] }
+spl-associated-token-account = { version = "3.0.2", features = ["no-entrypoint"] }
 
 [lib]
 crate-type = ["cdylib", "lib"]

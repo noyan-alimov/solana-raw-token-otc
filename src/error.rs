@@ -6,6 +6,21 @@ use solana_program::program_error::ProgramError;
 pub enum SwapError {
     #[error("Account is not writable")]
     AccountNotWritable,
+
+    #[error("Invalid ata creator offered mint")]
+    InvalidAtaCreatorOfferedMint,
+
+    #[error("Invalid ata creator offered owner")]
+    InvalidAtaCreatorOfferedOwner,
+
+    #[error("Invalid mint account data")]
+    InvalidMintAccountData,
+
+    #[error("Invalid token account data")]
+    InvalidTokenAccountData,
+
+    #[error("Invalid swap account data")]
+    InvalidSwapAccountData,
 }
 
 impl From<SwapError> for ProgramError {
