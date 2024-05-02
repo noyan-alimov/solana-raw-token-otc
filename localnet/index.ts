@@ -7,13 +7,15 @@ const bytesKp = fs.readFileSync('/Users/noyan/.config/solana/id.json')
 const keypair = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(bytesKp.toString())))
 
 const connection = new Connection('http://127.0.0.1:8899', 'confirmed')
-const programId = new PublicKey('BSfoRr7Ej7SLxVyb9tKnzxPdZbQzg9odiSwsfKboc9kw')
+const programId = new PublicKey('Fncs4u93Uvneur4CGV19pirRWwu5Kzbyyoi8MHU1JDnP')
 
 const offeredMint = new PublicKey('9umHeVn7PxGiRC4RC4MMNx8dg1eAQHFhyBddqUp3frL4')
 const ataCreatorOffered = new PublicKey('J4nV2YGRVRvdgmYEYwnAsVCHGCJvNtm5WXisNAi8qH5S')
 const desiredMint = new PublicKey('AGAkapXW8tYP8sxDKqeiJGJfdpmEPqUSg7Q8Wj4titGL')
 const swap = PublicKey.findProgramAddressSync([Buffer.from('swap'), ataCreatorOffered.toBuffer()], programId)[0]
 const escrow = PublicKey.findProgramAddressSync([Buffer.from('escrow'), ataCreatorOffered.toBuffer()], programId)[0]
+
+const DECIMAL_UNIT_PER_TOKEN = 1_000_000_000
 
 const createSwapIxn = new TransactionInstruction({
     keys: [
@@ -61,8 +63,8 @@ const createSwapIxn = new TransactionInstruction({
     programId,
     data: Buffer.from(Uint8Array.of(
         0, // CreateSwap instruction
-        ...new BN(20).toArray('le', 8), // offeredAmount
-        ...new BN(5).toArray('le', 8) // desiredAmount
+        ...new BN(20 * DECIMAL_UNIT_PER_TOKEN).toArray('le', 8), // offeredAmount
+        ...new BN(5 * DECIMAL_UNIT_PER_TOKEN).toArray('le', 8) // desiredAmount
     ))
 })
 

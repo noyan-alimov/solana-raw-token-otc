@@ -1,6 +1,6 @@
 use solana_program::{account_info::{next_account_info, AccountInfo}, entrypoint::ProgramResult, program::{invoke, invoke_signed}, program_error::ProgramError, program_pack::{IsInitialized, Pack}, pubkey::Pubkey, rent::Rent, system_instruction::create_account, system_program, sysvar::Sysvar};
 use spl_associated_token_account::tools::account::create_pda_account;
-use spl_token::{instruction::{initialize_account3, transfer}, state::{Account as TokenAccount, Mint}};
+use spl_token::{instruction::{close_account, initialize_account3, transfer}, state::{Account as TokenAccount, Mint}};
 
 use crate::{error::SwapError, state::Swap};
 
@@ -221,11 +221,11 @@ pub fn process_cancel_swap(program_id: &Pubkey, accounts: &[AccountInfo]) -> Pro
     let transfer_ixn = transfer(token_program.key, ata_escrow.key, ata_creator_offered.key, swap.key, &[swap.key], swap_data.offered_amount)?;
     invoke_signed(
         &transfer_ixn,
-        &[ata_escrow.clone(), ata_creator_offered.clone(), swap.clone()],
+        &[ata_escrow.clone(), ata_creator_offered.clone(), swap.clone(), token_program.clone()],
         &[&[&b"swap"[..], ata_creator_offered.key.as_ref(), &[swap_data.swap_bump]]]
     )?;
 
-    // Close swap
+    // // Close swap
     **creator.try_borrow_mut_lamports()? = creator
         .lamports()
         .checked_add(swap.lamports())
@@ -233,13 +233,13 @@ pub fn process_cancel_swap(program_id: &Pubkey, accounts: &[AccountInfo]) -> Pro
     **swap.try_borrow_mut_lamports()? = 0;
     *swap.try_borrow_mut_data()? = &mut [];
 
-    // Close escrow
-    **creator.try_borrow_mut_lamports()? = creator
-        .lamports()
-        .checked_add(ata_escrow.lamports())
-        .ok_or(ProgramError::ArithmeticOverflow)?;
-    **ata_escrow.try_borrow_mut_lamports()? = 0;
-    *ata_escrow.try_borrow_mut_data()? = &mut [];
+    // // Close escrow
+    let close_ata_escrow_ixn = close_account(token_program.key, ata_escrow.key, creator.key, swap.key, &[swap.key])?;
+    invoke_signed(
+        &close_ata_escrow_ixn,
+        &[ata_escrow.clone(), creator.clone(), swap.clone(), token_program.clone()],
+        &[&[&b"swap"[..], ata_creator_offered.key.as_ref(), &[swap_data.swap_bump]]]
+    )?;
 
     Ok(())
 }
